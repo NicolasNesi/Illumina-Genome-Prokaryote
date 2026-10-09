@@ -384,10 +384,11 @@ harvesttools -x parsnp_out/parsnp.xmfa -S parsnp_out/core.snps.fa
 fastANI \
 --query "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" \
 --refList <(ls "${PARSNPDB}"/Pseudomonas/*.fna) \
---output "${SAMPLE}_fastani.tsv" \
+--output "${SAMPLE}_fastANI.tsv" \
 --threads "${THREADS}"
 
-sort -k3,3nr "${SAMPLE}_fastani.tsv" | head
+best=$(sort -k3,3nr ${SAMPLE}_fastANI.tsv | head -n1)
+echo "Closest genome to $SAMPLE based on ANI: $(echo "$best" | cut -f2) (ANI = $(echo "$best" | cut -f3)%)"
 
 conda_switch phylo_env
 # Include:
