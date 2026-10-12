@@ -84,7 +84,7 @@ KRAKENDB="/dlocal/home/2019013/Databases/Kraken2_PlusPFP-2026"
 BAKTADB="/dlocal/home/2019013/Databases/Bakta/db"
 QUASTDB="/dlocal/home/2019013/Databases/QUAST/Reference_genomes"
 BUSCODB="/dlocal/home/2019013/Databases/BUSCO/lineages"
-PARSNPDB"/dlocal/home/2019013/Databases/ParSNP"
+PARSNPDB="/dlocal/home/2019013/Databases/ParSNP"
 
 # Array job
 SAMPLE="$(sed -n -e "${SLURM_ARRAY_TASK_ID}p" "$FOLDER/Scripts/List_samples_$RUN.txt" | awk '{print $1}')"
@@ -182,7 +182,7 @@ mv "${SAMPLE}"_unicycler_assembly/unicycler.log "${SAMPLE}"_unicycler_assembly/"
 # ---------------------------------
 echo "Mapping back reads against assembly for sample $SAMPLE"
 
-bowtie2-build "${SAMPLE}"_unicycler_assembly/"${SAMPLE}_assembly.fasta" ./"${SAMPLE}"_assembly
+bowtie2-build --threads "${THREADS}" "${SAMPLE}"_unicycler_assembly/"${SAMPLE}_assembly.fasta" ./"${SAMPLE}"_assembly
 
 bowtie2 \
 -1 "${SAMPLE}_CleanedReads_R1.fastq" \
@@ -206,22 +206,43 @@ awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${S
 # ---------------------------------
 # Generate a consensus from mapping
 # ---------------------------------
+
+bowtie2-build --threads "${THREADS}" "${REFGENOME}_genomic.fna" "${REFGENOME}"
+
+bowtie2 \
+-1 "${SAMPLE}_CleanedReads_R1.fastq" \
+-2 "${SAMPLE}_CleanedReads_R2.fastq" \
+-U "${SAMPLE}_CleanedReads_unpaired.fastq" \
+-x ./${REFGENOME} \
+--very-sensitive \
+--dovetail \
+--time \
+--threads "${THREADS}" \
+2> >(tee -a ${SAMPLE}_bowtie2.log >&2) \
+  | samtools sort --threads "${THREADS}" -o "${SAMPLE}_vs_${REFGENOME}.sorted.bam" -
+  samtools index "${SAMPLE}_vs_${REFGENOME}.sorted.bam"
+
+echo "Generate coverage statistics"
+
+samtools depth -a "${SAMPLE}_vs_${REFGENOME}.sorted.bam" | \
+awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}_MeanDepthCoverage.txt"
+
 echo "Generate a consensus with at least 10x depth for sample $SAMPLE"
 
-bcftools mpileup -f ref.fa -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}.sorted.bam" \
+bcftools mpileup -f ref.fa -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
   | bcftools call -mv --ploidy 1 -Ou \
   | bcftools view -i "QUAL>=30 && INFO/DP>=${MINDEPTH}" -Oz -o "${SAMPLE}_calls.vcf.gz"
 bcftools index "${SAMPLE}_calls.vcf.gz"
 
-samtools depth -a -q 20 -Q 20 "${SAMPLE}.sorted.bam" \
+samtools depth -a -q 20 -Q 20 "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
   | awk -v m="${MINDEPTH}" '$3<m{print $1"\t"$2-1"\t"$2}' \
   | bedtools merge -i - > "${SAMPLE}_low_cov.bed"
 
 bcftools consensus -f ref.fa -m "${SAMPLE}_low_cov.bed" "${SAMPLE}_calls.vcf.gz" > "${SAMPLE}_consensus.fa"
 
-grep -v '>' ${SAMPLE}_consensus.fa | tr -cd 'N' | wc -c
+grep -v '>' "${SAMPLE}_consensus.fa" | tr -cd 'N' | wc -c
 
-bcftools view -H ${SAMPLE}_calls.vcf.gz | wc -l
+bcftools view -H "${SAMPLE}_calls.vcf.gz" | wc -l
 # ---------------------------------
 
 # ---------------------------------
@@ -283,7 +304,7 @@ seqkit grep -c -v -f "${SAMPLE}"_list_contig_plasme.txt "${SAMPLE}"_unicycler_as
 # ---------------------------------
 conda_switch bakta_env
 # Include:
-# bakta=1.12.1
+# bakta=1.12.2
 
 echo "Annotation of chromosome for sample $SAMPLE"
 
@@ -396,7 +417,7 @@ cp "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" genomes_parsnp/
 cp "${PARSNPDB}"/Pseudomonas/*.fna genomes_parsnp/
 
 parsnp \
---reference "${PARSNPDB}/Pseudomonas/Pseudomonas_koreensis__GCF_001654515.1_ASM165451v1_genomic.fna" \
+--reference "${PARSNPDB}/${REFGENOME}_genomic.fna" \
 --sequences genomes_parsnp/ \
 --threads "${THREADS}" \
 --output-dir parsnp_out
