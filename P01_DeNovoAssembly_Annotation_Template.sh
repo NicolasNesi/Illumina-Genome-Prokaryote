@@ -42,6 +42,7 @@ PROJECT="FlorieGenomes"
 RUN=""
 QSCORE="20"
 GENUS=""
+MINDEPTH=10
 
 usage() {
    local exit_code="${1:-1}"
@@ -123,6 +124,8 @@ eval "$(conda shell.bash hook)"
 conda activate orthoproka_env
 set -u
 # Include:
+# bcftools=1.21
+# bedtools=2.31.1
 # bowtie2=2.5.4
 # checkm-genome=1.2.3
 # fastp=0.23.4
@@ -190,15 +193,35 @@ bowtie2 \
 --dovetail \
 --time \
 --threads "${THREADS}" \
--S "${SAMPLE}_assembly.sam" 2>&1 | tee -a "${SAMPLE}_Bowtie2Assembly_run${RUNDATE}.log"
+2> >(tee -a ${SAMPLE}_bowtie2.log >&2) \
+  | samtools sort --threads "${THREADS}" -o ${SAMPLE}.sorted.bam -
+  samtools index ${SAMPLE}.sorted.bam
 
 echo "Generate coverage statistics"
 
-samtools view --threads 96 -S --bam "${SAMPLE}_assembly.sam" -o "${SAMPLE}_assembly.bam"
-samtools sort --threads 96 "${SAMPLE}_assembly.bam" -o "${SAMPLE}_assembly.sorted.bam"
-samtools index "${SAMPLE}_assembly.sorted.bam"
 samtools depth -a "${SAMPLE}_assembly.sorted.bam" | \
-awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}' > "${SAMPLE}"_MeanDepthCoverage.txt
+awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}"_MeanDepthCoverage.txt
+# ---------------------------------
+
+# ---------------------------------
+# Generate a consensus from mapping
+# ---------------------------------
+echo "Generate a consensus with at least 10x depth for sample $SAMPLE"
+
+bcftools mpileup -f ref.fa -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}.sorted.bam" \
+  | bcftools call -mv --ploidy 1 -Ou \
+  | bcftools view -i "QUAL>=30 && INFO/DP>=${MINDEPTH}" -Oz -o "${SAMPLE}_calls.vcf.gz"
+bcftools index "${SAMPLE}_calls.vcf.gz"
+
+samtools depth -a -q 20 -Q 20 "${SAMPLE}.sorted.bam" \
+  | awk -v m="${MINDEPTH}" '$3<m{print $1"\t"$2-1"\t"$2}' \
+  | bedtools merge -i - > "${SAMPLE}_low_cov.bed"
+
+bcftools consensus -f ref.fa -m "${SAMPLE}_low_cov.bed" "${SAMPLE}_calls.vcf.gz" > "${SAMPLE}_consensus.fa"
+
+grep -v '>' ${SAMPLE}_consensus.fa | tr -cd 'N' | wc -c
+
+bcftools view -H ${SAMPLE}_calls.vcf.gz | wc -l
 # ---------------------------------
 
 # ---------------------------------
@@ -518,6 +541,9 @@ fi
 mv "${SAMPLE}"_assembly.sorted.ba* "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_MeanDepthCoverage.txt" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_Bowtie2Assembly_run${RUNDATE}.log" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_consensus.fa" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_low_cov.bed" "${FOLDER}/Bowtie2" 
+mv "${SAMPLE}_calls.vcf.gz" "${FOLDER}/Bowtie2"
 
 if [[ ! -d "${FOLDER}/Antismash" ]]; then
    mkdir -p "${FOLDER}/Antismash"
