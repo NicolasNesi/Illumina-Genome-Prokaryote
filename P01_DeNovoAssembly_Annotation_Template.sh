@@ -10,11 +10,11 @@
 #SBATCH --mail-user=nicolas.nesi@unicaen.fr     # Email address
 
 # ---------------------------------
-# Version v2.1
+# Version v2.2
 # ---------------------------------
 # author: Benedicte Langlois, Nicolas Nesi
 # University Caen Normandy, INSERM UMR 1311 DYNAMICURE
-# Date: 06/10/2026
+# Date: 12/10/2026
 # ---------------------------------
 
 # ---------------------------------
