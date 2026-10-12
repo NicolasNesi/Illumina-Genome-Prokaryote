@@ -85,6 +85,7 @@ BAKTADB="/dlocal/home/2019013/Databases/Bakta/db"
 QUASTDB="/dlocal/home/2019013/Databases/QUAST/Reference_genomes"
 BUSCODB="/dlocal/home/2019013/Databases/BUSCO/lineages"
 PARSNPDB="/dlocal/home/2019013/Databases/ParSNP"
+ANTISMASHDB="/dlocal/home/2019013/Databases/antismash"
 
 # Array job
 SAMPLE="$(sed -n -e "${SLURM_ARRAY_TASK_ID}p" "$FOLDER/Scripts/List_samples_$RUN.txt" | awk '{print $1}')"
@@ -466,7 +467,7 @@ conda_switch antismash_env
 
 antismash \
 "${SAMPLE}"_chrom_bakta/"${SAMPLE}_chrom.gbk" \
---databases /dlocal/home/2019013/Databases/antismash \
+--databases "${00ANTISMASHDB}" \
 --taxon bacteria \
 --output-dir "antismash_${SAMPLE}" \
 --output-basename "${SAMPLE}" \
