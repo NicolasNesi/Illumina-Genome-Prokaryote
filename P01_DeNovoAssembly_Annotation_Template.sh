@@ -232,7 +232,7 @@ echo "Generate a consensus with at least 10x depth for sample $SAMPLE"
 
 bcftools mpileup -f ref.fa -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
   | bcftools call -mv --ploidy 1 -Ou \
-  | bcftools view -i "QUAL>=30 && INFO/DP>=${MINDEPTH}" -Oz -o "${SAMPLE}_calls.vcf.gz"
+  | bcftools view -i "QUAL>=30 && INFO/DP>=${MINDEPTH} && (FORMAT/AD[0:1])/(FORMAT/DP)>=0.8" -Oz -o "${SAMPLE}_calls.vcf.gz"
 bcftools index "${SAMPLE}_calls.vcf.gz"
 
 samtools depth -a -q 20 -Q 20 "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
