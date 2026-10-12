@@ -197,7 +197,7 @@ echo "Generate coverage statistics"
 samtools view --threads 96 -S --bam "${SAMPLE}_assembly.sam" -o "${SAMPLE}_assembly.bam"
 samtools sort --threads 96 "${SAMPLE}_assembly.bam" -o "${SAMPLE}_assembly.sorted.bam"
 samtools index "${SAMPLE}_assembly.sorted.bam"
-samtools depth "${SAMPLE}_assembly.sorted.bam" | \
+samtools depth -a "${SAMPLE}_assembly.sorted.bam" | \
 awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}' > "${SAMPLE}"_MeanDepthCoverage.txt
 # ---------------------------------
 
