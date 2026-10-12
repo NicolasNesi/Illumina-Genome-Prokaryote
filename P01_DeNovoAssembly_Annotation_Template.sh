@@ -241,6 +241,8 @@ samtools depth -a -q 20 -Q 20 "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
 
 bcftools consensus -f ref.fa -m "${SAMPLE}_low_cov.bed" "${SAMPLE}_calls.vcf.gz" > "${SAMPLE}_consensus.fa"
 
+sed -i "s/^>\(.*\)/>${SAMPLE}_consensus_vs_${REFGENOME}_\1/" "${SAMPLE}_consensus.fa"
+
 grep -v '>' "${SAMPLE}_consensus.fa" | tr -cd 'N' | wc -c
 
 bcftools view -H "${SAMPLE}_calls.vcf.gz" | wc -l
