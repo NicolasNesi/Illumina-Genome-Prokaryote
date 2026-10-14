@@ -194,9 +194,9 @@ bowtie2 \
 --dovetail \
 --time \
 --threads "${THREADS}" \
-2> >(tee -a ${SAMPLE}_bowtie2.log >&2) \
-  | samtools sort --threads "${THREADS}" -o ${SAMPLE}.sorted.bam -
-  samtools index ${SAMPLE}.sorted.bam
+2> >(tee -a "${SAMPLE}_Bowtie2Assembly_run${RUNDATE}.log" >&2) \
+  | samtools sort --threads "${THREADS}" -o ${SAMPLE}_assembly.sorted.bam -
+  samtools index ${SAMPLE}_assembly.sorted.bam
 
 echo "Generate coverage statistics"
 
@@ -226,11 +226,11 @@ bowtie2 \
 echo "Generate coverage statistics"
 
 samtools depth -a "${SAMPLE}_vs_${REFGENOME}.sorted.bam" | \
-awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}_MeanDepthCoverage.txt"
+awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}_vs_${GENOME}_MeanDepthCoverage.txt"
 
 echo "Generate a consensus with at least 10x depth for sample $SAMPLE"
 
-bcftools mpileup -f ref.fa -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
+bcftools mpileup -f "${REFGENOME}_genomic.fna" -q 20 -Q 20 -d 10000 -a AD,DP -Ou "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
   | bcftools call -mv --ploidy 1 -Ou \
   | bcftools view -i "QUAL>=30 && INFO/DP>=${MINDEPTH} && (FORMAT/AD[0:1])/(FORMAT/DP)>=0.8" -Oz -o "${SAMPLE}_calls.vcf.gz"
 bcftools index "${SAMPLE}_calls.vcf.gz"
@@ -346,7 +346,7 @@ if [[ -s "${SAMPLE}"_predicted_plasmids.fasta  ]]; then
    
    awk -F'\t|;' '$0 ~ /pseudo=True/ {for (i=1; i<=NF; i++) if ($i ~ /^ID=/) print substr($i, 4)}' "${SAMPLE}"_plasmid_bakta/"${SAMPLE}"_plasmid.gff3 > "${SAMPLE}"_plasmid_bakta/"${SAMPLE}"_pseudogene_ids.txt
    
-   if [[ ! -s "${SAMPLE}_chrom_bakta/${SAMPLE}_pseudogene_ids.txt" ]]; then
+   if [[ ! -s "${SAMPLE}_plasmid_bakta/${SAMPLE}_pseudogene_ids.txt" ]]; then
        echo "No plasmid pseuodgenes found by Bakta"
    else
      awk 'BEGIN {while ((getline < "'"${SAMPLE}_plasmid_bakta/${SAMPLE}_pseudogene_ids.txt"'") > 0) ids[$1] = 1; close("'"${SAMPLE}_plasmid_bakta/${SAMPLE}_pseudogene_ids.txt"'")}{if ($0 ~ /^>/) {match($0, /^>([^ ]+)/, arr);if (arr[1] in ids) print $0 " [pseudogene]"; else print $0;} else { print $0;}}' "${SAMPLE}"_plasmid_bakta/"${SAMPLE}"_plasmid.ffn > "${SAMPLE}"_plasmid_bakta/"${SAMPLE}"_plasmid_edited.ffn
@@ -396,9 +396,9 @@ quast \
 "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" \
 --output-dir "QUAST_${SAMPLE}" \
 --pe1 "${SAMPLE}_CleanedReads_R1.fastq" \
---pe2 "${SAMPLE}_CleanedReads_R1.fastq" \
+--pe2 "${SAMPLE}_CleanedReads_R2.fastq" \
 -r "${QUASTDB}/${REFGENOME}_genomic.fna" \
---features gene:"${QUASTDB}/${REFERENCE}_genomic.gff" \
+--features gene:"${QUASTDB}/${REFGENOME}_genomic.gff" \
 --gene-finding \
 --plots-format svg \
 --threads "${THREADS}" 2>&1 | tee -a "${FOLDER}/Log/${RUN}_run${RUNDATE}/${SAMPLE}_QUAST_run${RUNDATE}.log"
@@ -469,7 +469,7 @@ conda_switch antismash_env
 
 antismash \
 "${SAMPLE}"_chrom_bakta/"${SAMPLE}_chrom.gbk" \
---databases "${00ANTISMASHDB}" \
+--databases "${ANTISMASHDB}" \
 --taxon bacteria \
 --output-dir "antismash_${SAMPLE}" \
 --output-basename "${SAMPLE}" \
@@ -589,10 +589,10 @@ if [[ ! -d "${FOLDER}/Iqtree" ]]; then
    mkdir -p "${FOLDER}/Iqtree"
 fi
 
-mv parsnp_out/iqtree-core.treefile "${FOLDER}/Iqtree/${SAMPLE}_iqtree-core.treefile"
-mv parsnp_out/iqtree-core.iqtree "${FOLDER}/Iqtree/${SAMPLE}_iqtree-core.iqtree"
-mv parsnp_out/iqtree-snps.treefile "${FOLDER}/Iqtree/${SAMPLE}_iqtree-snps.treefile"
-mv parsnp_out/iqtree-snps.iqtree "${FOLDER}/Iqtree/${SAMPLE}_iqtree-snps.iqtree"
+mv parsnp_out/iqtree_core.treefile "${FOLDER}/Iqtree/${SAMPLE}_iqtree_core.treefile"
+mv parsnp_out/iqtree_core.iqtree "${FOLDER}/Iqtree/${SAMPLE}_iqtree_core.iqtree"
+mv parsnp_out/iqtree_snps.treefile "${FOLDER}/Iqtree/${SAMPLE}_iqtree_snps.treefile"
+mv parsnp_out/iqtree_snps.iqtree "${FOLDER}/Iqtree/${SAMPLE}_iqtree_snps.iqtree"
 # ---------------------------------
 
 # ---------------------------------
