@@ -209,9 +209,9 @@ awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}
 # ---------------------------------
 echo "Mapping to reference genome and generate a consensus genome for sample $SAMPLE" 
 
-cp "${QUASTDB}/${REFGENOME}_genomic.fna" "${LOCAL_WORKING_DIR}"
+cp "${QUASTDB}/${REFGENOME}_genomic.fna" .
 
-bowtie2-build --threads "${THREADS}" "${LOCAL_WORKING_DIR}"/"${REFGENOME}_genomic.fna" "${REFGENOME}"
+bowtie2-build --threads "${THREADS}" "${REFGENOME}_genomic.fna" "${REFGENOME}"
 
 bowtie2 \
 -1 "${SAMPLE}_CleanedReads_R1.fastq" \
@@ -222,7 +222,7 @@ bowtie2 \
 --dovetail \
 --time \
 --threads "${THREADS}" \
-2> >(tee -a ${SAMPLE}_vs ${REFGENOME}_bowtie2.log >&2) \
+2> >(tee -a ${SAMPLE}_vs_${REFGENOME}_bowtie2.log >&2) \
   | samtools sort --threads "${THREADS}" -o "${SAMPLE}_vs_${REFGENOME}.sorted.bam" -
   samtools index "${SAMPLE}_vs_${REFGENOME}.sorted.bam"
 
@@ -377,10 +377,24 @@ conda_switch BUSCO_env
 # Include:
 # busco=5.8.3
 
+case "${GENUS,,}" in
+    pseudomonas)
+        BUSCO_LINEAGE="pseudomonadales_odb12" ;;
+    klebsiella|citrobacter|enterobacter|escherichia|cronobacter|salmonella)
+        BUSCO_LINEAGE="enterobacterales_odb12" ;;
+    enterococcus)
+        BUSCO_LINEAGE="lactobacillales_odb12" ;;
+    *)
+        BUSCO_LINEAGE="bacteria_odb12" ;;
+esac
+
+[[ -d "${BUSCODB}/${BUSCO_LINEAGE}" ]] || { echo "ERROR: BUSCO lineage ${BUSCODB}/${BUSCO_LINEAGE} not found" >&2; exit 1; }
+echo "BUSCO lineage: ${BUSCO_LINEAGE}"
+
 busco \
 --in "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" \
 --mode genome \
---lineage_dataset "${BUSCODB}/enterobacterales_odb12/" \
+--lineage_dataset "${BUSCODB}/${BUSCO_LINEAGE}/" \
 --out "${SAMPLE}"_BUSCO/ \
 --cpu "${THREADS}"
 
@@ -404,7 +418,7 @@ quast \
 --features gene:"${QUASTDB}/${REFGENOME}_genomic.gff" \
 --gene-finding \
 --plots-format svg \
---threads "${THREADS}" 2>&1 | tee -a "${FOLDER}/Log/${RUN}_run${RUNDATE}/${SAMPLE}_QUAST_run${RUNDATE}.log"
+--threads "${THREADS}" 2>&1 | tee -a "${SAMPLE}_QUAST_run${RUNDATE}.log"
 # ---------------------------------
 
 # ---------------------------------
@@ -422,8 +436,17 @@ mkdir -p genomes_parsnp
 cp "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" genomes_parsnp/
 cp "${PARSNPDB}"/"${GENUS}"/*.fna genomes_parsnp/
 
+shopt -s nullglob
+refs=( "${PARSNPDB}/${GENUS}/${REFGENOME}"__*_genomic.fna )
+shopt -u nullglob
+if [[ ${#refs[@]} -ne 1 ]]; then
+    echo "ERROR: expected 1 Parsnp reference for '${REFGENOME}' in ${PARSNPDB}/${GENUS}, found ${#refs[@]}" >&2
+    exit 1
+fi
+PARSNP_REF="${refs[0]}"
+
 parsnp \
---reference "${PARSNPDB}"/"${REFGENOME}"__*_genomic.fna \
+--reference "${PARSNP_REF}" \
 --sequences genomes_parsnp/ \
 --threads "${THREADS}" \
 --output-dir parsnp_out
@@ -433,7 +456,7 @@ harvesttools -x parsnp_out/parsnp.xmfa -S parsnp_out/core.snps.fa
 
 fastANI \
 --query "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" \
---refList <(ls "${PARSNPDB}"/Pseudomonas/*.fna) \
+--refList <(ls "${PARSNPDB}"/"${GENUS}"/*.fna) \
 --output "${SAMPLE}_fastANI.tsv" \
 --threads "${THREADS}"
 
@@ -548,6 +571,7 @@ if [[ ! -d "${FOLDER}/QUAST" ]]; then
 fi
 
 cp -R "QUAST_${SAMPLE}" "${FOLDER}/QUAST"
+mv "${SAMPLE}_QUAST_run${RUNDATE}.log" "${FOLDER}/QUAST"
 
 if [[ ! -d "${FOLDER}/Bakta" ]]; then
    mkdir -p "${FOLDER}/Bakta"
@@ -566,11 +590,11 @@ if [[ ! -d "${FOLDER}/Bowtie2" ]]; then
 fi
 
 mv "${SAMPLE}"_assembly.sorted.ba* "${FOLDER}/Bowtie2"
-mv "${SAMPLE}_vs_${REFGENOME}.sorted.bam" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}"_vs_"${REFGENOME}".sorted.ba* "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_MeanDepthCoverage.txt" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_vs_${REFGENOME}_MeanDepthCoverage.txt" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_Bowtie2Assembly_run${RUNDATE}.log" "${FOLDER}/Bowtie2"
-mv "${SAMPLE}_vs ${REFGENOME}_bowtie2.log" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_vs_${REFGENOME}_bowtie2.log" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_consensus.fa" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_low_cov.bed" "${FOLDER}/Bowtie2" 
 mv "${SAMPLE}_calls.vcf.gz" "${FOLDER}/Bowtie2"
