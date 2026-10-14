@@ -201,7 +201,7 @@ bowtie2 \
 echo "Generate coverage statistics"
 
 samtools depth -a "${SAMPLE}_assembly.sorted.bam" | \
-awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}"_MeanDepthCoverage.txt
+awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}' > "${SAMPLE}"_MeanDepthCoverage.txt
 # ---------------------------------
 
 # ---------------------------------
@@ -219,14 +219,14 @@ bowtie2 \
 --dovetail \
 --time \
 --threads "${THREADS}" \
-2> >(tee -a ${SAMPLE}_bowtie2.log >&2) \
+2> >(tee -a ${SAMPLE}_vs ${REFGENOME}_bowtie2.log >&2) \
   | samtools sort --threads "${THREADS}" -o "${SAMPLE}_vs_${REFGENOME}.sorted.bam" -
   samtools index "${SAMPLE}_vs_${REFGENOME}.sorted.bam"
 
 echo "Generate coverage statistics"
 
 samtools depth -a "${SAMPLE}_vs_${REFGENOME}.sorted.bam" | \
-awk '{sum+=$3; count++} END {if (n>0) print sum/n; else print "No data"}' > "${SAMPLE}_vs_${GENOME}_MeanDepthCoverage.txt"
+awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}' > "${SAMPLE}_vs_${REFGENOME}_MeanDepthCoverage.txt"
 
 echo "Generate a consensus with at least 10x depth for sample $SAMPLE"
 
@@ -239,7 +239,7 @@ samtools depth -a -q 20 -Q 20 "${SAMPLE}_vs_${REFGENOME}.sorted.bam" \
   | awk -v m="${MINDEPTH}" '$3<m{print $1"\t"$2-1"\t"$2}' \
   | bedtools merge -i - > "${SAMPLE}_low_cov.bed"
 
-bcftools consensus -f ref.fa -m "${SAMPLE}_low_cov.bed" "${SAMPLE}_calls.vcf.gz" > "${SAMPLE}_consensus.fa"
+bcftools consensus -f "${REFGENOME}_genomic.fna" -m "${SAMPLE}_low_cov.bed" "${SAMPLE}_calls.vcf.gz" > "${SAMPLE}_consensus.fa"
 
 sed -i "s/^>\(.*\)/>${SAMPLE}_consensus_vs_${REFGENOME}_\1/" "${SAMPLE}_consensus.fa"
 
@@ -563,8 +563,11 @@ if [[ ! -d "${FOLDER}/Bowtie2" ]]; then
 fi
 
 mv "${SAMPLE}"_assembly.sorted.ba* "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_vs_${REFGENOME}.sorted.bam" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_MeanDepthCoverage.txt" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_vs_${REFGENOME}_MeanDepthCoverage.txt" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_Bowtie2Assembly_run${RUNDATE}.log" "${FOLDER}/Bowtie2"
+mv "${SAMPLE}_vs ${REFGENOME}_bowtie2.log" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_consensus.fa" "${FOLDER}/Bowtie2"
 mv "${SAMPLE}_low_cov.bed" "${FOLDER}/Bowtie2" 
 mv "${SAMPLE}_calls.vcf.gz" "${FOLDER}/Bowtie2"
@@ -668,6 +671,6 @@ LC_ALL=C awk -F'\t' -v comma="$DEC_COMMA" 'BEGIN{OFS="\t"}
 # ---------------------------------
 # Cleaning Working Directory
 # ---------------------------------
-ls -R > "${FOLDER}/Scripts/List_files_remaining_in_LocalWorkingDir_for_${SAMPLE}_run${RUNDATE}.txt"
+ls -R "${LOCAL_WORK_DIR}" > "${FOLDER}/Scripts/List_files_remaining_in_LocalWorkingDir_for_${SAMPLE}_run${RUNDATE}.txt"
 rm -R "${LOCAL_WORK_DIR}"/*
 # ---------------------------------
