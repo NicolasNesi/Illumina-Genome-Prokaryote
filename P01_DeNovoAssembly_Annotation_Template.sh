@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 #SBATCH --job-name=P01_DeNovoAssembly_Annotation              # Job name
-#SBATCH --output=01_DeNovoAssembly_Annotation.%a.%A.out    # File to which stdout will be written
+#SBATCH --output=P01_DeNovoAssembly_Annotation.%a.%A.out    # File to which stdout will be written
 #SBATCH --error=P01_DeNovoAssembly_Annotation.%a.%A.err    # File to which stderr will be written
 #SBATCH --partition=tcourt                                     # Partition
 #SBATCH --cpus-per-task=48                        # Number of cores/cpus, 1 core has 2 threads (96 cores = 192 threads)
