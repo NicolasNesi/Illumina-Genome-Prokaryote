@@ -49,7 +49,7 @@ usage() {
    {
     echo "Usage: sbatch --array=1-x P01_DeNovoAssembly_Annotation_Template.sh -r RUN -g GENUS [-q QSCORE]"
 	echo "   -r, --run    Mandatory. Name of run directory"
-	echo "   -g, --genus  Mandatory. Name of the genus for Bakta annotation (e.g. Pseudomonas)"
+	echo "   -g, --genus  Mandatory. Name of the genus for Bakta and Parsnp (e.g. Pseudomonas)"
 	echo "   -q, --qscore Optional. Qscore threshold for reads quality filter [default 20]"
 	echo "   -h, --help   Show this help"
     } >&2
@@ -207,8 +207,11 @@ awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}
 # ---------------------------------
 # Generate a consensus from mapping
 # ---------------------------------
+echo "Mapping to reference genome and generate a consensus genome for sample $SAMPLE" 
 
-bowtie2-build --threads "${THREADS}" "${REFGENOME}_genomic.fna" "${REFGENOME}"
+cp "${QUASTDB}/${REFGENOME}_genomic.fna" "${LOCAL_WORKING_DIR}"
+
+bowtie2-build --threads "${THREADS}" "${LOCAL_WORKING_DIR}"/"${REFGENOME}_genomic.fna" "${REFGENOME}"
 
 bowtie2 \
 -1 "${SAMPLE}_CleanedReads_R1.fastq" \
@@ -417,10 +420,10 @@ conda_switch parsnp_env
 mkdir -p genomes_parsnp
 
 cp "${SAMPLE}_unicycler_assembly/${SAMPLE}_assembly_chrom.fasta" genomes_parsnp/
-cp "${PARSNPDB}"/Pseudomonas/*.fna genomes_parsnp/
+cp "${PARSNPDB}"/"${GENUS}"/*.fna genomes_parsnp/
 
 parsnp \
---reference "${PARSNPDB}/${REFGENOME}_genomic.fna" \
+--reference "${PARSNPDB}"/"${REFGENOME}"__*_genomic.fna \
 --sequences genomes_parsnp/ \
 --threads "${THREADS}" \
 --output-dir parsnp_out
