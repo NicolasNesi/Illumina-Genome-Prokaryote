@@ -10,21 +10,23 @@
 #        file names: <Genus_species>__<AssemblyLevel>_genomic.fna/.gff
 #
 # Usage:
-#   bash build_reference_db.sh -g GENUS [-s sp1,sp2,...] [-l species_list.txt] [-a assembly_summary.txt]
+#   bash build_reference_db.sh -g GENUS [-s sp1,sp2,...] [-l species_list.txt] [-A] [-a assembly_summary.txt]
 #     -g  Genus (e.g. Pseudomonas)                                            [mandatory]
 #     -s  Comma-separated Genus_species names to add to QUASTDB
 #     -l  File with one Genus_species per line (lines starting with # ignored)
+#     -A  Add ALL species of the genus (every genome in PARSNPDB/<Genus>/) to QUASTDB
 #     -a  Local assembly_summary.txt (downloaded if missing)
 #     -h  Show this help
-#   Without -s / -l only step 1 is run.
+#   -s, -l and -A can be combined. Without any of them only step 1 is run.
 #
 # Requirements: ncbi-datasets-cli (datasets, dataformat) ncbi-datasets_env, unzip, wget; internet access (login node).
 # add_quast_reference.sh and rename_quast_with_assembly_level.sh must be in the same folder as this script.
 # Safe to re-run: existing files are never overwritten.
 # Example:
-# bash build_reference_db.sh -g Pseudomonas                       # étape 1 seule (télécharger les génomes)
+# bash build_reference_db.sh -g Pseudomonas                       # step 1 only (download the genomes)
 # bash build_reference_db.sh -g Pseudomonas -s Pseudomonas_koreensis,Pseudomonas_putida_nbrc_14164
-# bash build_reference_db.sh -g Pseudomonas -l especes_quast.txt  # un Genus_species par ligne
+# bash build_reference_db.sh -g Pseudomonas -l especes_quast.txt  # one Genus_species per line
+# bash build_reference_db.sh -g Citrobacter -A                    # all species of the genus into QUASTDB
 # ---------------------------------
 
 # ---------------------------------
@@ -35,15 +37,17 @@ QUASTDB="${QUASTDB:-/dlocal/home/2019013/Databases/QUAST/Reference_genomes}"
 export PARSNPDB QUASTDB
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-usage() { sed -n '2,/^# -----*$/{/^# ---/!s/^# \{0,1\}//p}' "${BASH_SOURCE[0]}" >&2; exit "${1:-1}"; }
+# Print the header block (between the first two "# ----" lines)
+usage() { awk '/^# -+$/ {n++; if (n==2) exit; next} n==1 {sub(/^# ?/, ""); print}' "${BASH_SOURCE[0]}" >&2; exit "${1:-1}"; }
 
-GENUS=""; SPLIST=""; SPFILE=""; ASUM=""
-while getopts "g:s:l:a:h" opt; do
+GENUS=""; SPLIST=""; SPFILE=""; ASUM=""; ALL=0
+while getopts "g:s:l:a:Ah" opt; do
     case "${opt}" in
         g) GENUS="${OPTARG}" ;;
         s) SPLIST="${OPTARG}" ;;
         l) SPFILE="${OPTARG}" ;;
         a) ASUM="${OPTARG}" ;;
+        A) ALL=1 ;;
         h) usage 0 ;;
         *) usage 1 ;;
     esac
@@ -91,7 +95,7 @@ echo "    ${new} new genome(s) copied; ${OUTDIR} now holds $(ls "${OUTDIR}"/*.fn
 # ---------------------------------
 
 # ---------------------------------
-ls "${OUTDIR}"/*.fna | xargs -n 1 basename > "${GENUS}_Quast.txt"
+ls "${OUTDIR}"/*fna | xargs -n 1 basename > "${GENUS}_Quast.txt"
 # ---------------------------------
 
 # ---------------------------------
@@ -109,11 +113,23 @@ if [[ -n "${SPFILE}" ]]; then
         fi
     done < "${SPFILE}"
 fi
+if (( ALL )); then
+    # Genus_species__GCF_...  ->  Genus_species
+    shopt -s nullglob
+    for f in "${OUTDIR}"/*__GCF_*_genomic.fna; do
+        b="$(basename "${f}")"
+        SPECIES+=("${b%%__GCF_*}")
+    done
+    shopt -u nullglob
+fi
 
 if [[ ${#SPECIES[@]} -eq 0 ]]; then
-    echo "No species given (-s / -l): QUASTDB not modified."
+    echo "No species given (-s / -l / -A): QUASTDB not modified."
     exit 0
 fi
+
+# Remove duplicates
+mapfile -t SPECIES < <(printf '%s\n' "${SPECIES[@]}" | sort -u)
 
 echo "[2/3] Adding ${#SPECIES[@]} species to ${QUASTDB}..."
 failed=()

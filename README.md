@@ -108,12 +108,13 @@ The Parsnp reference is found with the pattern `<Genus_species>__*_genomic.fna`;
 
 ### One-step setup
 
-`build_reference_db.sh` chains the three steps below for one genus: it downloads the RefSeq reference genomes into `PARSNPDB/<Genus>/` (NCBI `datasets`), adds the species you choose to `QUASTDB` with their GFF, and adds the assembly level to the `QUASTDB` file names. It needs `ncbi-datasets-cli` (`datasets`, `dataformat`), `unzip` and `wget`, internet access, and the two helper scripts in the same folder. Existing files are never overwritten, so it can be re-run.
+`build_reference_db.sh` chains the three steps below for one genus: it downloads the RefSeq reference genomes into `PARSNPDB/<Genus>/` (NCBI `datasets`), adds the species you choose to `QUASTDB` with their GFF, and adds the assembly level to the `QUASTDB` file names. It needs `ncbi-datasets-cli` (`datasets`, `dataformat`), `unzip` and `wget`, internet access, and the two helper scripts in the same folder. Existing files are never overwritten, so it can be re-run. `-A` adds every genome of the genus to `QUASTDB`, which is practical for small genera but means hundreds of GFF downloads for a large one such as *Pseudomonas*; `-s`, `-l` and `-A` can be combined.
 
 ```bash
 bash build_reference_db.sh -g Pseudomonas                                          # download genomes only
 bash build_reference_db.sh -g Pseudomonas -s Pseudomonas_koreensis,Pseudomonas_putida_nbrc_14164
 bash build_reference_db.sh -g Pseudomonas -l species_for_quast.txt                 # one Genus_species per line
+bash build_reference_db.sh -g Citrobacter -A                                          # all species of the genus into QUASTDB
 ```
 
 ### Individual steps
