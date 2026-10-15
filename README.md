@@ -2,7 +2,7 @@
 
 A SLURM array-job script that takes paired-end Illumina reads from a bacterial isolate and runs a complete pipeline: read QC, de novo assembly, reference-based consensus, taxonomic profiling, plasmid/chromosome separation, annotation, quality assessment, phylogeny and secondary-metabolite prediction. It processes **one sample per array task**.
 
-- **Version:** 2.2
+- **Version:** 2.3
 - **Authors:** Benedicte Langlois, Nicolas Nesi
 - **Affiliation:** University of Caen Normandy, INSERM UMR 1311 DYNAMICURE
 - **Target environment:** CRIANN HPC cluster (SLURM + conda/mamba)
@@ -59,7 +59,7 @@ Set in the *Variables and Paths* section of the script:
 |----------|---------|
 | `KRAKENDB` | Kraken2 PlusPFP database |
 | `BAKTADB` | Bakta database |
-| `QUASTDB` | Reference genomes `<Genus_species>_genomic.fna` and `.gff` (QUAST and Bowtie2 consensus) |
+| `QUASTDB` | Reference genomes `<Genus_species>__<AssemblyLevel>_genomic.fna` and `.gff` (QUAST and Bowtie2 consensus) |
 | `BUSCODB` | BUSCO lineage datasets |
 | `PARSNPDB` | Genomes for Parsnp / fastANI, one folder per genus: `<GENUS>/<Genus_species>__<GCF_accession>_<assembly>_genomic.fna` |
 | `ANTISMASHDB` | antiSMASH databases |
@@ -101,7 +101,7 @@ PLASMe is installed outside conda (`/soft/.../PLASMe`) with its own database.
 
 | Database | Used by | File naming |
 |----------|---------|-------------|
-| `QUASTDB` | Bowtie2 consensus, bcftools, QUAST | `<Genus_species>_genomic.fna` and `<Genus_species>_genomic.gff` |
+| `QUASTDB` | Bowtie2 consensus, bcftools, QUAST | `<Genus_species>__<AssemblyLevel>_genomic.fna` and `.gff`, with `AssemblyLevel` = `CompleteGenome`, `Chromosome`, `Scaffold` or `Contig` |
 | `PARSNPDB/<GENUS>/` | Parsnp reference, Parsnp tree, fastANI | `<Genus_species>__<GCF_accession>_<assembly>_genomic.fna` |
 
 The Parsnp reference is found with the pattern `<Genus_species>__*_genomic.fna`; the script stops if it matches zero or several files. The double underscore means `Pseudomonas_syringae` does not match pathovar entries such as `Pseudomonas_syringae_pv__tomato_...`.
@@ -111,6 +111,15 @@ To add a species to `QUASTDB`, use the helper script (run on a node with interne
 ```bash
 bash add_quast_reference.sh Pseudomonas_koreensis
 ```
+
+The NCBI assembly level is then added to the file names with `rename_quast_with_assembly_level.sh`. For each GFF it reads the accession from the `#!genome-build-accession` header line, looks it up in NCBI's `assembly_summary.txt` (column 12, `assembly_level`) and renames the FASTA and GFF to `<Genus_species>__<AssemblyLevel>_genomic.fna/.gff`. Use `--dry-run` to preview. The script can be re-run safely and writes a summary to `quast_reference_levels.tsv`.
+
+```bash
+bash rename_quast_with_assembly_level.sh --dry-run   # preview
+bash rename_quast_with_assembly_level.sh             # rename
+```
+
+The pipeline finds the reference in `QUASTDB` with the pattern `<Genus_species>__*_genomic.fna` and logs its assembly level. Prefer `CompleteGenome` references; `Scaffold` and `Contig` references are fragmented and give less reliable QUAST metrics and consensus.
 
 ---
 
@@ -185,6 +194,7 @@ Example acceptance thresholds (defined for *Klebsiella*, adapt per species):
 - The script uses `set -euo pipefail`: any failing step stops the task for that sample.
 - `LOCAL_WORK_DIR` must be provided by the cluster environment.
 - Contigs predicted as plasmids by PLASMe are removed from the assembly before chromosome annotation, CheckM bin selection, BUSCO and QUAST.
+- If PLASMe predicts no plasmid, all contigs are treated as chromosome (`_assembly_chrom.fasta` is a copy of the assembly) and no plasmid annotation is run.
 - Pseudogenes flagged by Bakta are tagged `[pseudogene]` in the FFN headers.
 
 ## Citation
