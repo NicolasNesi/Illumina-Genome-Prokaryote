@@ -10,11 +10,11 @@
 #SBATCH --mail-user=nicolas.nesi@unicaen.fr     # Email address
 
 # ---------------------------------
-# Version v2.2
+# Version v2.3
 # ---------------------------------
 # author: Benedicte Langlois, Nicolas Nesi
 # University Caen Normandy, INSERM UMR 1311 DYNAMICURE
-# Date: 12/10/2026
+# Date: 15/10/2026
 # ---------------------------------
 
 # ---------------------------------
@@ -207,9 +207,19 @@ awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print "No data"}
 # ---------------------------------
 # Generate a consensus from mapping
 # ---------------------------------
-echo "Mapping to reference genome and generate a consensus genome for sample $SAMPLE" 
+echo "Mapping to reference genome and generate a consensus genome for sample $SAMPLE"
 
-cp "${QUASTDB}/${REFGENOME}_genomic.fna" .
+shopt -s nullglob
+qrefs=( "${QUASTDB}/${REFGENOME}"__*_genomic.fna )
+shopt -u nullglob
+[[ ${#qrefs[@]} -eq 1 ]] || { echo "ERROR: expected 1 QUAST reference for '${REFGENOME}', found ${#qrefs[@]}" >&2; exit 1; }
+REFFASTA="${qrefs[0]}"
+REFGFF="${REFFASTA%.fna}.gff"
+[[ -s "${REFGFF}" ]] || { echo "ERROR: GFF missing for ${REFGENOME}: ${REFGFF}" >&2; exit 1; }
+REFLEVEL="${REFFASTA##*__}"; REFLEVEL="${REFLEVEL%_genomic.fna}"
+echo "Reference ${REFGENOME}: assembly level ${REFLEVEL}"
+
+cp "${REFFASTA}" "${REFGENOME}_genomic.fna"
 
 bowtie2-build --threads "${THREADS}" "${REFGENOME}_genomic.fna" "${REFGENOME}"
 
@@ -300,9 +310,17 @@ python /soft/2019013/Logiciels/PLASMe/PLASMe.py \
 --database /soft/2019013/Logiciels/PLASMe/DB/ \
 --temp "${SAMPLE}"_temp
 
-awk -F '\t' '{print $1}' "${SAMPLE}"_predicted_plasmids.fasta_report.csv | sed '1d' > "${SAMPLE}"_list_contig_plasme.txt
+if [[ -s "${SAMPLE}_predicted_plasmids.fasta_report.csv" ]]; then
+   awk -F '\t' '{print $1}' "${SAMPLE}"_predicted_plasmids.fasta_report.csv | sed '1d' > "${SAMPLE}"_list_contig_plasme.txt
+else
+   : > "${SAMPLE}"_list_contig_plasme.txt
+fi
 
-seqkit grep -c -v -f "${SAMPLE}"_list_contig_plasme.txt "${SAMPLE}"_unicycler_assembly/"${SAMPLE}_assembly.fasta" > "${SAMPLE}"_unicycler_assembly/"${SAMPLE}"_assembly_chrom.fasta
+if [[ -s "${SAMPLE}"_list_contig_plasme.txt ]]; then
+   seqkit grep -c -v -f "${SAMPLE}"_list_contig_plasme.txt "${SAMPLE}"_unicycler_assembly/"${SAMPLE}_assembly.fasta" > "${SAMPLE}"_unicycler_assembly/"${SAMPLE}"_assembly_chrom.fasta
+else
+  cp "${SAMPLE}"_unicycler_assembly/"${SAMPLE}_assembly.fasta" "${SAMPLE}"_unicycler_assembly/"${SAMPLE}"_assembly_chrom.fasta
+fi
 # ---------------------------------
 
 # ---------------------------------
@@ -414,8 +432,8 @@ quast \
 --output-dir "QUAST_${SAMPLE}" \
 --pe1 "${SAMPLE}_CleanedReads_R1.fastq" \
 --pe2 "${SAMPLE}_CleanedReads_R2.fastq" \
--r "${QUASTDB}/${REFGENOME}_genomic.fna" \
---features gene:"${QUASTDB}/${REFGENOME}_genomic.gff" \
+-r "${REFFASTA}" \
+--features gene:"${REFGFF}" \
 --gene-finding \
 --plots-format svg \
 --threads "${THREADS}" 2>&1 | tee -a "${SAMPLE}_QUAST_run${RUNDATE}.log"
@@ -549,8 +567,12 @@ if [[ ! -d "${FOLDER}/PLASMe" ]]; then
    mkdir -p "${FOLDER}/PLASMe"
 fi
 
-mv "${SAMPLE}_predicted_plasmids.fasta" "${FOLDER}/PLASMe/"
-mv "${SAMPLE}_predicted_plasmids.fasta_report.csv" "${FOLDER}/PLASMe/"
+if [[ -f "${SAMPLE}_predicted_plasmids.fasta" ]]; then
+    mv "${SAMPLE}_predicted_plasmids.fasta" "${FOLDER}/PLASMe/"
+fi
+if [[ -f "${SAMPLE}_predicted_plasmids.fasta_report.csv" ]]; then
+    mv "${SAMPLE}_predicted_plasmids.fasta_report.csv" "${FOLDER}/PLASMe/"
+fi
 
 if [[ ! -d "${FOLDER}/CheckM" ]]; then
    mkdir -p "${FOLDER}/CheckM"
