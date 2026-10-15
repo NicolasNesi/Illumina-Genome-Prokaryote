@@ -106,6 +106,18 @@ PLASMe is installed outside conda (`/soft/.../PLASMe`) with its own database.
 
 The Parsnp reference is found with the pattern `<Genus_species>__*_genomic.fna`; the script stops if it matches zero or several files. The double underscore means `Pseudomonas_syringae` does not match pathovar entries such as `Pseudomonas_syringae_pv__tomato_...`.
 
+### One-step setup
+
+`build_reference_db.sh` chains the three steps below for one genus: it downloads the RefSeq reference genomes into `PARSNPDB/<Genus>/` (NCBI `datasets`), adds the species you choose to `QUASTDB` with their GFF, and adds the assembly level to the `QUASTDB` file names. It needs `ncbi-datasets-cli` (`datasets`, `dataformat`), `unzip` and `wget`, internet access, and the two helper scripts in the same folder. Existing files are never overwritten, so it can be re-run.
+
+```bash
+bash build_reference_db.sh -g Pseudomonas                                          # download genomes only
+bash build_reference_db.sh -g Pseudomonas -s Pseudomonas_koreensis,Pseudomonas_putida_nbrc_14164
+bash build_reference_db.sh -g Pseudomonas -l species_for_quast.txt                 # one Genus_species per line
+```
+
+### Individual steps
+
 To add a species to `QUASTDB`, use the helper script (run on a node with internet access). It copies the FASTA from `PARSNPDB` under the QUAST name and downloads the GFF of the same assembly from NCBI, so sequence IDs match:
 
 ```bash
